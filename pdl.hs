@@ -38,6 +38,15 @@ verificaframe :: Frame -> Program -> Bool
 verificaframe (states, graph) program = case program of
     Atomic _ -> all (induzidoAtomico program) graph 
     SeqComp _ -> induzidoSeqComp (program) (pegaArestasComProg1OuProg2 program graph)
+    NDC _ -> isInducedNDC (program) (pegaArestasComProg1OuProg2 program graph)
+
+--------------------NDC-------------------------
+isInducedNDC :: Program -> [(State, [(Program, State)])] -> Bool
+isInducedNDC program graph = all (cadaVerticeTemSaidaComOsDoisProgramas program) graph
+    where
+        cadaVerticeTemSaidaComOsDoisProgramas :: Program -> (State, [(Program, State)]) -> Bool
+        cadaVerticeTemSaidaComOsDoisProgramas program (state, ligacoes) = 
+            (any (\(p, nextState) -> p == getFirstProgram program) ligacoes) && (any (\(p, nextState) -> p == getLastProgram program) ligacoes)
 
 
 ---------------------ATOMIC----------------------
@@ -60,7 +69,7 @@ pegaArestasComProg1OuProg2 program graph = filter (labelComPrograma program) gra
 
 induzidoSeqComp :: Program -> [(State, [(Program, State)])] -> Bool
 induzidoSeqComp program graph = 
-    labelComPrimeiroTemSaidaComSegundo (todosLabelComPrograma (getFirstProgram program) graph) (todosLabelComPrograma (getLastProgram program) graph )
+    chegadoComPrimeiroTemSaidaComSegundo (todosLabelComPrograma (getFirstProgram program) graph) (todosLabelComPrograma (getLastProgram program) graph )
 
 todosLabelComPrograma :: Program -> [(State, [(Program, State)])] -> [(State, [(Program, State)])]
 todosLabelComPrograma program graph =
@@ -70,8 +79,8 @@ todosLabelComPrograma program graph =
             checkExit program (state, successors) = 
                 all (\(p, s) -> p == program) successors
 
-labelComPrimeiroTemSaidaComSegundo :: [(State, [(Program, State)])] -> [(State, [(Program, State)])] -> Bool
-labelComPrimeiroTemSaidaComSegundo labeledWithFirstProgram labeledWithSecondProgram =
+chegadoComPrimeiroTemSaidaComSegundo :: [(State, [(Program, State)])] -> [(State, [(Program, State)])] -> Bool
+chegadoComPrimeiroTemSaidaComSegundo labeledWithFirstProgram labeledWithSecondProgram =
     all (hasAPathWithSecond labeledWithSecondProgram) labeledWithFirstProgram 
 
 
@@ -93,11 +102,11 @@ main = do
     let pi3 = Atomic 'c'
     let x1 = State ("x1", ['p'])
     let x2 = State("x2", ['q'])
-    let arestas = [(x1, [(pi, x1)]), (x1, [(pi2, x2)]), (x1, [(pi3, x2)])]
+    let arestas = [(x1, [(pi, x1)]), (x1, [(pi2, x1)]), (x2, [(pi3, x2)])]
     let w = [x1, x2]
     let myFrame = (w, arestas)
 
-    let alpha = SeqComp (pi, pi2)
+    let alpha = SeqComp (NDC (pi, pi2), pi3)
     putStrLn $ show (verificaframe myFrame alpha)
 --
     --let programToTest = pi
