@@ -33,83 +33,66 @@ getLastProgram :: Program -> Program
 getLastProgram (SeqComp (_, program)) = program
 getLastProgram (NDC (_, program)) = program
 
+rDoPrograma :: Program -> Frame -> [(State, State)]
+rDoPrograma program (state, graph) = 
+    case program of
+        Atomic _ ->  procuraLabelsAtomicas program graph
+        SeqComp _ -> rDeSeqComp (rDoPrograma (getFirstProgram program) (state, graph)) (rDoPrograma (getLastProgram program) (state, graph))
+        NDC _ -> rDoPrograma (getFirstProgram program) (state, graph) ++ rDoPrograma (getLastProgram program) (state, graph)
+        Ite iteProgram -> rDoPrograma (iteProgram) (state, graph)
 
-verificaframe :: Frame -> Program -> Bool
-verificaframe (states, graph) program = case program of
-    Atomic _ -> all (induzidoAtomico program) graph 
-    SeqComp _ -> induzidoSeqComp (program) (pegaArestasComProg1OuProg2 program graph)
-    NDC _ -> isInducedNDC (program) (pegaArestasComProg1OuProg2 program graph)
-
---------------------NDC-------------------------
-isInducedNDC :: Program -> [(State, [(Program, State)])] -> Bool
-isInducedNDC program graph = all (cadaVerticeTemSaidaComOsDoisProgramas program) graph
+rDeSeqComp :: [(State, State)] -> [(State, State)] -> [(State, State)]
+rDeSeqComp alphaTuples betaTuples =
+    juntaVertices (filter (temChegadaEm betaTuples) alphaTuples) (filter (temSaidaEm alphaTuples) betaTuples)
     where
-        cadaVerticeTemSaidaComOsDoisProgramas :: Program -> (State, [(Program, State)]) -> Bool
-        cadaVerticeTemSaidaComOsDoisProgramas program (state, ligacoes) = 
-            (any (\(p, nextState) -> p == getFirstProgram program) ligacoes) && (any (\(p, nextState) -> p == getLastProgram program) ligacoes)
+        juntaVertices :: [(State, State)] -> [(State, State)] -> [(State, State)]
+        juntaVertices alphas betas =
+            [(s1Dealpha, s2DeBeta) | (s1Dealpha, s2DeAlpha) <- alphas, (s1DeBeta, s2DeBeta) <- betas, s2DeAlpha == s1DeBeta]
 
+        temChegadaEm :: [(State, State)] -> (State, State) -> Bool
+        temChegadaEm betaTuples (s1Dealpha, s2DeAlpha) = 
+            any(\(s1DeBeta, s2DeBeta) -> s1DeBeta == s2DeAlpha) betaTuples
 
----------------------ATOMIC----------------------
-induzidoAtomico :: Program -> (State, [(Program, State)]) -> Bool
-induzidoAtomico program (state, prox) = all (isProxValidAtomic program state) prox
+        temSaidaEm :: [(State, State)] -> (State, State) -> Bool
+        temSaidaEm alphaTuples (s1DeBeta, s2DeBeta) =
+            any(\(s1Dealpha, s2DeAlpha) -> s1DeBeta == s2DeAlpha) alphaTuples
 
-
-isProxValidAtomic :: Program -> State -> (Program, State) -> Bool
-isProxValidAtomic program state (labelProgram, prox) = (program == labelProgram)
-
-
-----------------------SEQCOMP------------------
-pegaArestasComProg1OuProg2 :: Program -> [(State, [(Program, State)])] -> [(State, [(Program, State)])]
-pegaArestasComProg1OuProg2 program graph = filter (labelComPrograma program) graph
-  where
-    labelComPrograma :: Program -> (State, [(Program, State)]) -> Bool
-    labelComPrograma program (state, successors) =
-      any (\(p, nextState) -> p == getFirstProgram program) successors || any (\(p, nextState) -> p == getLastProgram program) successors
-
-
-induzidoSeqComp :: Program -> [(State, [(Program, State)])] -> Bool
-induzidoSeqComp program graph = 
-    chegadoComPrimeiroTemSaidaComSegundo (todosLabelComPrograma (getFirstProgram program) graph) (todosLabelComPrograma (getLastProgram program) graph )
-
-todosLabelComPrograma :: Program -> [(State, [(Program, State)])] -> [(State, [(Program, State)])]
-todosLabelComPrograma program graph =
-    filter (checkExit program) graph
-        where
-            checkExit :: Program -> (State, [(Program, State)]) -> Bool
-            checkExit program (state, successors) = 
-                all (\(p, s) -> p == program) successors
-
-chegadoComPrimeiroTemSaidaComSegundo :: [(State, [(Program, State)])] -> [(State, [(Program, State)])] -> Bool
-chegadoComPrimeiroTemSaidaComSegundo labeledWithFirstProgram labeledWithSecondProgram =
-    all (hasAPathWithSecond labeledWithSecondProgram) labeledWithFirstProgram 
-
-
-hasAPathWithSecond :: [(State, [(Program, State)])] -> (State, [(Program, State)]) -> Bool
-hasAPathWithSecond states2 (state, successors)  = 
-    all (checkExit states2) successors
-        where
-            checkExit :: [(State, [(Program, State)])] -> (Program, State) -> Bool
-            checkExit states2 (p, s) =
-                all (checkExitDeep s) states2
-                    where
-                        checkExitDeep :: State -> (State, [(Program, State)]) -> Bool
-                        checkExitDeep s (s2, successors) = s == s2
+procuraLabelsAtomicas :: Program -> [(State, [(Program, State)])] -> [(State, State)]
+procuraLabelsAtomicas program graph =
+    map pegaEstados (temLabelDoPrograma program graph)
+    where
+        temLabelDoPrograma :: Program -> [(State, [(Program, State)])] -> [(State, [(Program, State)])]
+        temLabelDoPrograma program graph =
+            filter (temLabelDoProgramaNivel2 program) graph
+            where
+                temLabelDoProgramaNivel2 :: Program -> (State, [(Program, State)]) -> Bool
+                temLabelDoProgramaNivel2 program (state, successors) =
+                    case successors of
+                        (p, _): _ -> p == program
+        
+        pegaEstados:: (State, [(Program, State)]) -> (State, State)
+        pegaEstados (state, successors) =
+            (state, pegaEstadoDoSucessor successors)
+        
+        pegaEstadoDoSucessor:: [(Program, State)] -> State
+        pegaEstadoDoSucessor successors = 
+            case successors of
+                (p, nextState) : _ -> nextState
 
 main :: IO ()
 main = do
-    let pi = Atomic 'a'
-    let pi2 = Atomic 'b'
-    let pi3 = Atomic 'c'
-    let x1 = State ("x1", ['p'])
-    let x2 = State("x2", ['q'])
-    let arestas = [(x1, [(pi, x1)]), (x1, [(pi2, x1)]), (x2, [(pi3, x2)])]
-    let w = [x1, x2]
-    let myFrame = (w, arestas)
+    let a = Atomic 'a'
+    let b = Atomic 'b'
 
-    let alpha = SeqComp (NDC (pi, pi2), pi3)
-    putStrLn $ show (verificaframe myFrame alpha)
---
-    --let programToTest = pi
---
-    --putStrLn $ show (verificaframe myFrame programToTest)
+    let u = State ("u", ['p'])
+    let v = State("v", ['q'])
+    let w = State("w", ['q'])
+
+    let arestas = [(u, [])]
+    let k = [u, v, w]
+    
+    let myFrame = (k, arestas)
+
+    let alpha = SeqComp (a, b)
+    putStrLn $ show (rDoPrograma alpha myFrame)
 
