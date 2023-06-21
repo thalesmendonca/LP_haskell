@@ -20,7 +20,7 @@ data Program
     | SeqComp   (Program, Program)
     | NDC       (Program, Program)
     | Ite       (Program)
-    | Test      (Proposition)
+    | Test      (Proposition, Program)
     deriving(Eq, Show)
 
 type Frame = ([State], [(State, [(Program, State)])])
@@ -32,6 +32,24 @@ getFirstProgram (NDC (program, _)) = program
 getLastProgram :: Program -> Program
 getLastProgram (SeqComp (_, program)) = program
 getLastProgram (NDC (_, program)) = program
+
+verifyFrame :: Program -> Frame -> String
+verifyFrame program (states, graph) 
+    | isIte program && not (isEmpty graph) = "O grafo é induzido pelo programa"
+    | null (rDoPrograma program (states, graph)) = "O grafo não é induzido pelo programa"
+    | otherwise = "O grafo é induzido pelo programa"
+
+isIte :: Program -> Bool
+isIte program = case program of 
+    Ite _ -> True
+    _ -> False
+
+isEmpty :: [a] -> Bool
+isEmpty = \list ->
+    case list of
+        [] -> True
+        _ -> False
+
 
 rDoPrograma :: Program -> Frame -> [(State, State)]
 rDoPrograma program (state, graph) = 
@@ -68,6 +86,7 @@ procuraLabelsAtomicas program graph =
                 temLabelDoProgramaNivel2 :: Program -> (State, [(Program, State)]) -> Bool
                 temLabelDoProgramaNivel2 program (state, successors) =
                     case successors of
+                        [] -> False
                         (p, _): _ -> p == program
         
         pegaEstados:: (State, [(Program, State)]) -> (State, State)
@@ -81,18 +100,24 @@ procuraLabelsAtomicas program graph =
 
 main :: IO ()
 main = do
-    let a = Atomic 'a'
-    let b = Atomic 'b'
+    let p1 = Atomic 'a'
+    let p2 = Atomic 'b'
+    let p3 = Atomic 'c'
+    let p4 = Atomic 'd'
+    let p5 = Atomic 'e'
+    let p6 = Atomic 'f'
 
-    let u = State ("u", ['p'])
-    let v = State("v", ['q'])
-    let w = State("w", ['q'])
 
-    let arestas = [(u, [])]
-    let k = [u, v, w]
+    let x1 = State ("u", ['p'])
+    let x2 = State("v", ['q'])
+    let x3 = State("w", ['q'])
+    let x4 = State("y", ['q'])
+
+    let arestas = [(x1, [(p1, x1)]), (x1, [(p4, x2)]), (x2, [(p4, x3)]), (x1, [(p3, x4)]), (x3, [(p4, x4)]), (x4, [])]
+    let k = [x1, x2, x3, x4]
     
     let myFrame = (k, arestas)
 
-    let alpha = SeqComp (a, b)
-    putStrLn $ show (rDoPrograma alpha myFrame)
 
+    let alpha = Ite (NDC (Ite (SeqComp(p1, p2)), SeqComp(p3,p4)))
+    putStrLn $ show (verifyFrame alpha myFrame)
